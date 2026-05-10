@@ -26,10 +26,16 @@ using graph neural networks.
 
 ## Biological Background
 CTCs face three distinct survival stresses during hematogenous dissemination.
-Existing studies examine each stress independently — no framework has integrated
+Existing studies examine each stress independently - no framework has integrated
 transcriptomic data across conditions to identify conserved survival mechanisms.
 Full literature review covers CCL5/Treg evasion axis (Sun et al. 2021),
 surfaceome-based immune escape (MHC-I downregulation, aberrant glycosylation),
 and hypoxia-driven CTC cluster formation (Donato et al. 2020).
 
-## Pipeline
+## Supervision
+Dr. Sarita Poonia, PhD, Cleveland Clinic
+
+## Target Venues
+- NeurIPS 2026 ML for Health Workshop
+- RECOMB-CCB 2027
+- Briefings in Bioinformatics
