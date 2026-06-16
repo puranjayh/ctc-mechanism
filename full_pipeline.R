@@ -3,6 +3,7 @@
 # ============================================
 library(Seurat)
 library(ggplot2)
+library(patchwork)
 library(org.Hs.eg.db)
 library(AnnotationDbi)
 library(SingleCellExperiment)
@@ -22,10 +23,10 @@ convert_ensembl_to_symbol <- function(expr_matrix) {
   symbols     <- symbols[!is.na(symbols) & symbols != ""]
   common_ids  <- intersect(genes, names(symbols))
   if (length(common_ids) == 0) stop("No Ensembl IDs could be mapped.")
-  expr_sub            <- as.data.frame(expr_matrix[common_ids, , drop = FALSE])
+  expr_sub             <- as.data.frame(expr_matrix[common_ids, , drop = FALSE])
   expr_sub$hgnc_symbol <- symbols[rownames(expr_sub)]
-  expr_agg            <- aggregate(. ~ hgnc_symbol, data = expr_sub, FUN = mean)
-  rownames(expr_agg)  <- expr_agg$hgnc_symbol
+  expr_agg             <- aggregate(. ~ hgnc_symbol, data = expr_sub, FUN = mean)
+  rownames(expr_agg)   <- expr_agg$hgnc_symbol
   expr_agg$hgnc_symbol <- NULL
   return(as.matrix(expr_agg))
 }
@@ -43,7 +44,7 @@ counts_to_tpm <- function(counts_matrix, gene_lengths_kb) {
 # ============================================
 files_126669 <- list.files(
   "main/expression_data/GSE126669",
-  pattern = ".counts.txt.gz",
+  pattern    = ".counts.txt.gz",
   full.names = TRUE
 )
 
@@ -53,13 +54,13 @@ expr1_list <- lapply(files_126669, function(f) {
   return(x)
 })
 
-expr1_raw             <- Reduce(function(x, y) merge(x, y, by = "gene", all = TRUE), expr1_list)
-rownames(expr1_raw)   <- expr1_raw$gene
-expr1_raw$gene        <- NULL
+expr1_raw                   <- Reduce(function(x, y) merge(x, y, by = "gene", all = TRUE), expr1_list)
+rownames(expr1_raw)         <- expr1_raw$gene
+expr1_raw$gene              <- NULL
 expr1_raw[is.na(expr1_raw)] <- 0
-expr1                 <- as.matrix(expr1_raw)
-mode(expr1)           <- "numeric"
-colnames(expr1)       <- gsub(".counts.txt.gz", "", colnames(expr1))
+expr1                       <- as.matrix(expr1_raw)
+mode(expr1)                 <- "numeric"
+colnames(expr1)             <- gsub(".counts.txt.gz", "", colnames(expr1))
 
 rm(expr1_list, expr1_raw, files_126669)
 cat("expr1 dimensions:", dim(expr1), "\n")
@@ -75,17 +76,17 @@ expr3_br16    <- as.matrix(assay(sce_br16,    "counts"))
 expr3_lm2     <- as.matrix(assay(sce_lm2,     "counts"))
 expr3_patient <- as.matrix(assay(sce_patient, "counts"))
 
-cat("expr1:",        dim(expr1),        "\n")
-cat("expr3_br16:",   dim(expr3_br16),   "\n")
-cat("expr3_lm2:",    dim(expr3_lm2),    "\n")
+cat("expr1:",         dim(expr1),         "\n")
+cat("expr3_br16:",    dim(expr3_br16),    "\n")
+cat("expr3_lm2:",     dim(expr3_lm2),     "\n")
 cat("expr3_patient:", dim(expr3_patient), "\n")
 
 # ============================================
 # ENSEMBL -> GENE SYMBOL CONVERSION
 # ============================================
-expr1_final        <- convert_ensembl_to_symbol(expr1)
-expr3_br16_final   <- convert_ensembl_to_symbol(expr3_br16)
-expr3_lm2_final    <- convert_ensembl_to_symbol(expr3_lm2)
+expr1_final         <- convert_ensembl_to_symbol(expr1)
+expr3_br16_final    <- convert_ensembl_to_symbol(expr3_br16)
+expr3_lm2_final     <- convert_ensembl_to_symbol(expr3_lm2)
 expr3_patient_final <- convert_ensembl_to_symbol(expr3_patient)
 
 # ============================================
@@ -94,7 +95,7 @@ expr3_patient_final <- convert_ensembl_to_symbol(expr3_patient)
 meta1     <- read.csv("main/metadata/metadata_GSE126669.csv")
 circ_meta <- read.csv("main/metadata/metadata_GSE180097.csv")
 
-# Filter circ_meta to only active/resting
+# Filter circ_meta to only active/resting (drops numeric timepoints like "1000","1800" etc.)
 circ_meta_filtered <- circ_meta[
   circ_meta$timepoint %in% c("active", "resting"),
 ]
@@ -124,46 +125,63 @@ labels_gse3 <- data.frame(
 )
 
 cat("expr3_combined cols:", ncol(expr3_combined), "\n")
-cat("labels_gse3 rows:",   nrow(labels_gse3),    "\n")
+cat("labels_gse3 rows:",    nrow(labels_gse3),     "\n")
 
 # ============================================
-# LOAD POST-QC WORKSPACE AND BUILD SEURAT
+# LOAD POST-QC WORKSPACE
 # ============================================
 load("post_qc_final_workspace.RData")
 
 # ============================================
-# PRE-PROCESSING
+# MANUAL LOG1P ON EXISTING SPLIT LAYERS
+# NOTE: NO JoinLayers() before this step.
+# PhD's instruction: FindVariableFeatures must
+# see per-batch split layers, not joined data,
+# otherwise HVG selection gets dominated by
+# whichever batch has the strongest signal.
 # ============================================
-seurat_merged <- JoinLayers(seurat_merged)
+for (layer_name in Layers(seurat_merged, assay = "RNA")) {
+  if (grepl("counts", layer_name)) {
+    data_layer_name <- gsub("counts", "data", layer_name)
+    raw_tpm          <- LayerData(seurat_merged, layer = layer_name)
+    LayerData(seurat_merged, layer = data_layer_name) <- log1p(raw_tpm)
+  }
+}
+cat("Manual log1p transformation applied to all existing split TPM layers.\n")
 
-seurat_merged <- SetAssayData(
+# ============================================
+# VARIABLE FEATURES - mvp (safer for Smart-seq2 TPM)
+# ============================================
+seurat_merged <- FindVariableFeatures(
   seurat_merged,
-  layer    = "data",
-  new.data = log1p(GetAssayData(seurat_merged, layer = "counts"))
+  selection.method = "mvp",
+  nfeatures        = 3000
 )
-cat("Log1p done\n")
-
-seurat_merged[["RNA"]] <- split(
-  seurat_merged[["RNA"]],
-  f = seurat_merged$dataset_id
-)
-cat("Layers:", paste(Layers(seurat_merged), collapse = ", "), "\n")
-
-seurat_merged <- FindVariableFeatures(seurat_merged, nfeatures = 3000)
 cat("Variable features:", length(VariableFeatures(seurat_merged)), "\n")
 
-seurat_merged <- ScaleData(seurat_merged)
-cat("Scaling done\n")
+# ============================================
+# SCALE DATA (no centering - protects zero-inflated TPM)
+# ============================================
+seurat_merged <- ScaleData(
+  seurat_merged,
+  do.center = FALSE,
+  do.scale  = TRUE
+)
+cat("Scaling completed safely for TPM.\n")
 
+# ============================================
+# PCA
+# ============================================
 seurat_merged <- RunPCA(seurat_merged, npcs = 50)
 ElbowPlot(seurat_merged, ndims = 50)
 
-save.image("post_pca.RData")
-cat("Saved post_pca.RData\n")
+save.image("post_pca_v2.RData")
+cat("Saved post_pca_v2.RData\n")
 
 # ============================================
-# HARMONY INTEGRATION
+# HARMONY INTEGRATION (only - no CCA)
 # ============================================
+cat("Running Harmony integration...\n")
 seurat_harmony <- IntegrateLayers(
   object         = seurat_merged,
   method         = HarmonyIntegration,
@@ -173,158 +191,119 @@ seurat_harmony <- IntegrateLayers(
 )
 
 seurat_harmony <- JoinLayers(seurat_harmony)
-seurat_harmony <- FindNeighbors(seurat_harmony, reduction = "harmony", dims = 1:20)
+
+dims_to_use <- 1:30
+
+cat("Running UMAP...\n")
+seurat_harmony <- RunUMAP(
+  seurat_harmony,
+  reduction      = "harmony",
+  dims           = dims_to_use,
+  reduction.name = "umap.harmony"
+)
+
+cat("Finding neighbors and clusters...\n")
+seurat_harmony <- FindNeighbors(
+  seurat_harmony,
+  reduction = "harmony",
+  dims      = dims_to_use
+)
 seurat_harmony <- FindClusters(seurat_harmony, resolution = 0.5)
-seurat_harmony <- RunUMAP(seurat_harmony, reduction = "harmony", dims = 1:20)
+cat("Clustering complete!\n")
+
+save.image("post_integration_v2.RData")
+cat("Saved post_integration_v2.RData\n")
 
 # ============================================
-# ASSIGN LABELS - HARMONY
+# ASSIGN LABELS
+# stress_condition (binary):
+#   GSE180097 -> resting = Stressed, active  = Baseline
+#   GSE126669 -> hypoxia Positive   = Stressed, Negative = Baseline
 # ============================================
-cell_names_stripped_harmony <- gsub(
+cell_names_stripped <- gsub(
   "^(GSE126669_|BR16_|LM2_|PATIENT_)", "",
   colnames(seurat_harmony)
 )
 
 seurat_harmony$hypoxia <- labels_gse1$hypoxia[
-  match(cell_names_stripped_harmony, labels_gse1$expr_sample)
+  match(cell_names_stripped, labels_gse1$expr_sample)
 ]
 
 seurat_harmony$timepoint <- labels_gse3$timepoint[
-  match(cell_names_stripped_harmony, labels_gse3$expr_sample)
+  match(cell_names_stripped, labels_gse3$expr_sample)
 ]
 
-# stress_condition: timepoint for GSE180097, hypoxia for GSE126669
-seurat_harmony$stress_condition <- seurat_harmony$timepoint
-seurat_harmony$stress_condition[
-  is.na(seurat_harmony$stress_condition)
-] <- ifelse(
-  seurat_harmony$hypoxia[
-    is.na(seurat_harmony$stress_condition)
-  ] == "Positive",
-  "Hypoxia",
-  "Normoxia"
+seurat_harmony$stress_condition <- ifelse(
+  !is.na(seurat_harmony$timepoint),
+  ifelse(seurat_harmony$timepoint == "resting", "Stressed", "Baseline"),
+  ifelse(seurat_harmony$hypoxia == "Positive", "Stressed", "Baseline")
 )
 
-cat("\nHarmony - Hypoxia distribution:\n")
-print(table(seurat_harmony$hypoxia,         useNA = "always"))
-cat("\nHarmony - Timepoint distribution:\n")
-print(table(seurat_harmony$timepoint,        useNA = "always"))
-cat("\nHarmony - Stress condition distribution:\n")
-print(table(seurat_harmony$stress_condition, useNA = "always"))
-
-# ============================================
-# DIMPLOTS - HARMONY
-# ============================================
-p1 <- DimPlot(seurat_harmony, reduction = "umap",
-              group.by = "dataset_id")        + ggtitle("Harmony - by Dataset")
-p2 <- DimPlot(seurat_harmony, reduction = "umap",
-              group.by = "seurat_clusters",
-              label    = TRUE)                + ggtitle("Harmony - by Cluster")
-p3 <- DimPlot(seurat_harmony, reduction = "umap",
-              group.by = "stress_condition")  + ggtitle("Harmony - Stress Condition")
-(p1 | p2) / p3
-
-save.image("after_stress_after_harmony_final.RData")
-cat("Saved harmony workspace\n")
-
-# ============================================
-# CCA INTEGRATION
-# (load from post_pca to keep separate)
-# ============================================
-load("post_pca.RData")
-
-seurat_merged <- JoinLayers(seurat_merged)
-
-seurat_merged <- SetAssayData(
-  seurat_merged,
-  layer    = "data",
-  new.data = log1p(GetAssayData(seurat_merged, layer = "counts"))
+# stress_detail: keeps the two stressors visually distinct on one plot
+seurat_harmony$stress_detail <- ifelse(
+  !is.na(seurat_harmony$timepoint),
+  ifelse(seurat_harmony$timepoint == "resting", "Resting (Stressed)", "Active (Baseline)"),
+  ifelse(seurat_harmony$hypoxia == "Positive", "Hypoxia (Stressed)", "Normoxia (Baseline)")
 )
 
-seurat_merged[["RNA"]] <- split(
-  seurat_merged[["RNA"]],
-  f = seurat_merged$dataset_id
-)
-
-cat("Layers after split:\n")
-print(Layers(seurat_merged))
-
-seurat_cca <- IntegrateLayers(
-  object         = seurat_merged,
-  method         = CCAIntegration,
-  orig.reduction = "pca",
-  new.reduction  = "integrated.cca",
-  dims           = 1:20,
-  k.anchor       = 3,
-  k.filter       = 10,
-  k.score        = 10,
-  k.weight       = 20,
-  verbose        = TRUE
-)
-
-seurat_cca <- JoinLayers(seurat_cca)
-cat("CCA integration done\n")
-
-seurat_cca <- FindNeighbors(seurat_cca, reduction = "integrated.cca", dims = 1:20)
-seurat_cca <- FindClusters(seurat_cca,  resolution = 0.5)
-seurat_cca <- RunUMAP(
-  seurat_cca,
-  reduction      = "integrated.cca",
-  dims           = 1:20,
-  reduction.name = "umap.cca"
-)
-cat("UMAP done\n")
+# ============================================
+# SANITY CHECKS
+# ============================================
+cat("\nHypoxia distribution:\n");          print(table(seurat_harmony$hypoxia,          useNA = "always"))
+cat("\nTimepoint distribution:\n");        print(table(seurat_harmony$timepoint,        useNA = "always"))
+cat("\nStress condition distribution:\n"); print(table(seurat_harmony$stress_condition, useNA = "always"))
+cat("\nStress detail distribution:\n");    print(table(seurat_harmony$stress_detail,    useNA = "always"))
 
 # ============================================
-# ASSIGN LABELS - CCA
+# PLOTS - exactly as specified by PhD
 # ============================================
-cell_names_stripped_cca <- gsub(
-  "^(GSE126669_|BR16_|LM2_|PATIENT_)", "",
-  colnames(seurat_cca)
-)
+p1 <- DimPlot(seurat_harmony,
+              reduction = "umap.harmony",
+              group.by  = "dataset_id") + ggtitle("UMAP by Dataset (Integrated)")
 
-seurat_cca$hypoxia <- labels_gse1$hypoxia[
-  match(cell_names_stripped_cca, labels_gse1$expr_sample)
-]
+p2 <- DimPlot(seurat_harmony,
+              reduction = "umap.harmony",
+              group.by  = "seurat_clusters",
+              label     = TRUE) + ggtitle("UMAP by Seurat Clusters")
 
-seurat_cca$timepoint <- labels_gse3$timepoint[
-  match(cell_names_stripped_cca, labels_gse3$expr_sample)
-]
-
-# stress_condition: timepoint for GSE180097, hypoxia for GSE126669
-seurat_cca$stress_condition <- seurat_cca$timepoint
-seurat_cca$stress_condition[
-  is.na(seurat_cca$stress_condition)
-] <- ifelse(
-  seurat_cca$hypoxia[
-    is.na(seurat_cca$stress_condition)
-  ] == "Positive",
-  "Hypoxia",
-  "Normoxia"
-)
-
-cat("\nCCA - Hypoxia distribution:\n")
-print(table(seurat_cca$hypoxia,         useNA = "always"))
-cat("\nCCA - Timepoint distribution:\n")
-print(table(seurat_cca$timepoint,        useNA = "always"))
-cat("\nCCA - Stress condition distribution:\n")
-print(table(seurat_cca$stress_condition, useNA = "always"))
+p1 + p2
 
 # ============================================
-# DIMPLOTS - CCA
+# ADDITIONAL PLOTS - stress condition exploration
 # ============================================
-p1 <- DimPlot(seurat_cca, reduction = "umap.cca",
-              group.by = "dataset_id")        + ggtitle("CCA - by Dataset")
-p2 <- DimPlot(seurat_cca, reduction = "umap.cca",
-              group.by = "seurat_clusters",
-              label    = TRUE)                + ggtitle("CCA - by Cluster")
-p3 <- DimPlot(seurat_cca, reduction = "umap.cca",
-              group.by = "hypoxia")           + ggtitle("CCA - Hypoxia (GSE126669)")
-p4 <- DimPlot(seurat_cca, reduction = "umap.cca",
-              group.by = "timepoint")         + ggtitle("CCA - Timepoint (GSE180097)")
-p5 <- DimPlot(seurat_cca, reduction = "umap.cca",
-              group.by = "stress_condition")  + ggtitle("CCA - Stress Condition")
-(p1 | p2) / (p3 | p4) / p5
 
-save.image("post_cca_integration.RData")
-cat("Saved post_cca_integration.RData\n")
+# Combined binary stress condition
+p3 <- DimPlot(seurat_harmony, reduction = "umap.harmony",
+              group.by = "stress_condition") + ggtitle("UMAP by Stress Condition")
+
+# Hypoxia only (GSE126669 cells - others NA)
+p4 <- DimPlot(seurat_harmony, reduction = "umap.harmony",
+              group.by = "hypoxia") + ggtitle("UMAP by Hypoxia (GSE126669)")
+
+# Timepoint only (GSE180097 cells - others NA)
+p5 <- DimPlot(seurat_harmony, reduction = "umap.harmony",
+              group.by = "timepoint") + ggtitle("UMAP by Timepoint (GSE180097)")
+
+(p3 | p4) / p5
+
+# All four conditions on one combined plot:
+# resting vs active AND hypoxia vs normoxia, distinct colors
+p6 <- DimPlot(
+  seurat_harmony,
+  reduction = "umap.harmony",
+  group.by  = "stress_detail",
+  cols      = c(
+    "Resting (Stressed)"  = "#D55E00",
+    "Active (Baseline)"   = "#56B4E9",
+    "Hypoxia (Stressed)"  = "#CC79A7",
+    "Normoxia (Baseline)" = "#009E73"
+  )
+) + ggtitle("UMAP - Resting vs Active & Hypoxia vs Normoxia")
+
+p6
+
+# ============================================
+# SAVE FINAL WORKSPACE
+# ============================================
+save.image("post_integration_stress_v2.RData")
+cat("Saved post_integration_stress_v2.RData\n")
