@@ -48,6 +48,11 @@ biology and is the strongest, most positive result so far.
 
 ## 3. TODO (priority order, based on current results)
 
+> **MINIMUM BAR FOR JOURNAL SUBMISSION = items 1, 2, 3 below.**
+> Until these are done, the work is preprint/workshop-grade, not journal-grade.
+> Items 1–3 are doable in days with existing code; items 4–5 (more data) are the hard part.
+
+
 1. **[High] GSEA-validate the HIF survival core.** fgsea/Hallmark on the hypoxia-vs-rest
    overlap; report a tight enriched core, not all 847 genes. → turns "promising" into "proven."
 2. **[High] De-confound the bodyguard result.** Re-test neutrophil recruitment using
