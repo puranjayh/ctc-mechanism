@@ -67,8 +67,11 @@ active=Baseline, hypoxia Positive=Stressed, Negative=Baseline.
 - `gnn_disentangle.py` — disentanglement GCN (Method 4).
 
 **Paper:**
-- `paper/cross_stressor_ctc_paper.md` + `.docx` — workshop manuscript (negative-result framing).
-- `paper/build_docx.js` — regenerates the Word doc.
+- `paper/hypoxia_cluster_escort_paper.md` + `.docx` — **PRIMARY manuscript** (mechanistic:
+  hypoxia → CTC clustering + neutrophil escort; includes the negative results as controls).
+- `paper/cross_stressor_ctc_paper.md` + `.docx` — companion workshop manuscript
+  (cross-stressor negative-result benchmark + GNN).
+- `paper/build_docx_mechanistic.js`, `paper/build_docx.js` — regenerate the Word docs.
 
 **Result tables (CSV):**
 - `hypoxia_survival_markers.csv` — genes up in hypoxia-Positive CTCs.

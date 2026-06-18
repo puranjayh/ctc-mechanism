@@ -58,7 +58,8 @@ biology and is the strongest, most positive result so far.
 4. **[Med] Cluster-size dose-response.** Correlate hypoxia score vs `number of ctcs`
    (continuous) — strengthens the "hypoxia → clustering" claim.
 5. **[Med] Annotate all 3 clusters** with markers (EMT/stemness/proliferation/hypoxia).
-6. **[Low] Decide venue & finalize framing** (see §4). Add real citations.
+6. **[Low] Finalize the written draft** `paper/hypoxia_cluster_escort_paper.md`: decide
+   venue, add real citations, fold in GSEA/de-confound results once done.
 7. **[Low] Optional negative-result companion**: the cross-stressor benchmark can be a
    separate short workshop paper (already drafted in `paper/`).
 
@@ -66,8 +67,11 @@ biology and is the strongest, most positive result so far.
 
 ## 4. Planned paper — structure
 
-**Working title:** *Hypoxia licenses the aggressive cluster-and-escort phenotype of
-circulating tumor cells* (mechanistic framing — primary paper).
+> **DRAFT WRITTEN:** `paper/hypoxia_cluster_escort_paper.md` (+ `.docx`). The structure
+> below is implemented in that draft; remaining work is the analyses in §3/§5.
+
+**Working title:** *Hypoxia Licenses the Cluster-and-Escort Phenotype of Circulating
+Tumor Cells* (mechanistic framing — primary paper).
 
 1. **Abstract** — hypoxia → CTC clustering + neutrophil escort; not circadian-timed.
 2. **Introduction** — CTCs face bloodstream stress; clusters & neutrophil CTCs are most
