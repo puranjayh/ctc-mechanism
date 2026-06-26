@@ -90,13 +90,7 @@ contribution here.
 | `cross_stressor_transfer.R`, `rescue_test.R` | Gene- and pathway-level transfer tests |
 | `gnn_disentangle.py`, `export_for_gnn.R` | Disentanglement GNN (PyTorch) + its data export |
 
-**Data & docs:** `metadata/` (GEO metadata + parsers), `expression_data/` (QC figures + loader),
-`paper/` (earlier manuscript drafts — see note below), `PROJECT_HANDOFF.md` (detailed background).
-
-> **Note on `paper/`:** contains an earlier manuscript for the **cross-stressor negative
-> result** (still valid). The original hypoxia/cluster *mechanistic* draft was **removed** —
-> its claims were overturned by the de-confounding (see `deconfound_results.md`); it remains
-> in git history for provenance.
+**Data & docs:** `metadata/` (GEO metadata + parsers), `expression_data/` (QC figures + loader).
 
 ---
 

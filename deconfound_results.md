@@ -1,7 +1,7 @@
 # De-confounding + GSEA results (2026-06-24)
 
 Run from `ctc_obj.rds` via `gsea_deconfound.R` and `perdonor_breakdown.R`.
-These results **materially revise** the mechanistic scoreboard in PROJECT_HANDOFF.md §6.
+These results **materially revise** the project's original mechanistic hypotheses.
 
 ## A. GSEA validation of the hypoxia survival core — HOLDS ✅
 
