@@ -1,5 +1,9 @@
 # CTC Mechanism Project — Session Handoff
 
+> ⚠️ **Partly superseded.** §6 below (mechanistic hypotheses) reported results later shown
+> to be **donor/contamination artifacts**. See `README.md` and `deconfound_results.md` for
+> the corrected findings. This file is kept for background/provenance.
+>
 > Paste this whole file into a new Claude session on the new laptop to continue with full context.
 > Last updated: 2026-06-19. Repo: https://github.com/puranjayh/ctc-mechanism
 

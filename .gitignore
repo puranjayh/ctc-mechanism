@@ -1,5 +1,8 @@
 *.gz
 *.rds
+*.RData
+*.Rhistory
+*.log
+.DS_Store
 expression_data/
 sce/
-*.rds 
