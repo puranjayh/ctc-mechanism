@@ -4,5 +4,7 @@
 *.Rhistory
 *.log
 .DS_Store
+figures/*.tiff
+Rplots.pdf
 expression_data/
 sce/
